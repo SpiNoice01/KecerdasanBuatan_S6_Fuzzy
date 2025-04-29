@@ -1,19 +1,11 @@
 import pandas as pd
 
-# ==========================
-# 1. Baca data dari file Excel
-# ==========================
+# 1. Baca data dari file
 data = pd.read_excel("restoran.xlsx")
 
-# ==========================
-# 2. Fungsi Fuzzifikasi Pelayanan (Buruk, Sedang, Bagus)
-# ==========================
+# 2. Fuzzifikasi untuk Pelayanan
 def fuzzifikasi_pelayanan(nilai):
-    # Bentuk fungsi segitiga untuk setiap kategori
-    if nilai <= 50:
-        buruk = (50 - nilai) / 50
-    else:
-        buruk = 0
+    buruk = max(0, (50 - nilai) / 50) if nilai <= 50 else 0
 
     if 50 < nilai < 75:
         sedang = (nilai - 50) / 25
@@ -22,16 +14,11 @@ def fuzzifikasi_pelayanan(nilai):
     else:
         sedang = 0
 
-    if nilai >= 75:
-        bagus = (nilai - 75) / 25
-    else:
-        bagus = 0
+    bagus = max(0, (nilai - 75) / 25) if nilai >= 75 else 0
 
     return buruk, sedang, bagus
 
-# ==========================
-# 3. Fungsi Fuzzifikasi Harga (Murah, Sedang, Mahal)
-# ==========================
+# 3. Fuzzifikasi untuk Harga
 def fuzzifikasi_harga(nilai):
     if nilai <= 25000:
         murah = 1
@@ -56,55 +43,65 @@ def fuzzifikasi_harga(nilai):
 
     return murah, sedang, mahal
 
-# ==========================
-# 4. Inferensi dan Defuzzifikasi (metode Weighted Average)
-# ==========================
+# 4. Fungsi untuk interpretasi skor ke dalam kategori
+def interpretasi_kelayakan(skor):
+    if skor < 40:
+        return "Tidak Layak"
+    elif skor < 60:
+        return "Kurang Layak"
+    elif skor < 80:
+        return "Layak"
+    else:
+        return "Sangat Layak"
+
+# 5. Fungsi utama: Hitung skor kelayakan
 def hitung_kelayakan(pelayanan, harga):
-    # Fuzzifikasi input
     buruk, sedang_p, bagus = fuzzifikasi_pelayanan(pelayanan)
     murah, sedang_h, mahal = fuzzifikasi_harga(harga)
 
-    # Daftar aturan fuzzy yang aktif
     aturan = []
 
-    # Aturan 1: Jika pelayanan sedang DAN harga murah → Layak (skor 75)
-    if sedang_p > 0 and murah > 0:
-        alpha = min(sedang_p, murah)
-        aturan.append((alpha, 75))
+    aturan_logika = [
+        (buruk, murah, 50),     # Buruk & Murah → Kurang Layak
+        (buruk, sedang_h, 25),  # Buruk & Sedang → Tidak Layak
+        (buruk, mahal, 25),     # Buruk & Mahal → Tidak Layak
+        (sedang_p, murah, 75),  # Sedang & Murah → Layak
+        (sedang_p, sedang_h, 50), # Sedang & Sedang → Kurang Layak
+        (sedang_p, mahal, 25),  # Sedang & Mahal → Tidak Layak
+        (bagus, murah, 100),    # Bagus & Murah → Sangat Layak
+        (bagus, sedang_h, 75),  # Bagus & Sedang → Layak
+        (bagus, mahal, 50),     # Bagus & Mahal → Kurang Layak
+    ]
 
-    # Aturan 2: Jika pelayanan bagus DAN harga murah → Sangat Layak (skor 100)
-    if bagus > 0 and murah > 0:
-        alpha = min(bagus, murah)
-        aturan.append((alpha, 100))
+    for p, h, output in aturan_logika:
+        alpha = min(p, h)
+        if alpha > 0:
+            aturan.append((alpha, output))
 
-    # Defuzzifikasi menggunakan metode rata-rata berbobot
     if aturan:
-        total_numerator = sum(a * z for a, z in aturan)
-        total_denominator = sum(a for a, _ in aturan)
-        skor_kelayakan = total_numerator / total_denominator
+        total_num = sum(a * z for a, z in aturan)
+        total_den = sum(a for a, _ in aturan)
+        skor = total_num / total_den
     else:
-        skor_kelayakan = 0
+        skor = 0
 
-    return skor_kelayakan
+    return skor
 
-# ==========================
-# 5. Hitung skor kelayakan untuk semua data
-# ==========================
+# 6. Proses semua data
 data["SKOR_KELAYAKAN"] = data.apply(
-    lambda baris: hitung_kelayakan(baris["PELAYANAN"], baris["HARGA"]),
+    lambda row: hitung_kelayakan(row["PELAYANAN"], row["HARGA"]),
     axis=1
 )
 
-# ==========================
-# 6. Ambil 5 restoran terbaik
-# ==========================
+# 7. Tambahkan kolom interpretasi
+data["KETERANGAN"] = data["SKOR_KELAYAKAN"].apply(interpretasi_kelayakan)
+
+# 8. Ambil 5 restoran terbaik
 top5 = data.sort_values("SKOR_KELAYAKAN", ascending=False).head(5)
 
-# ==========================
-# 7. Tampilkan hasil di terminal
-# ==========================
+# 9. Tampilkan hasil di terminal
 print("=== 5 Restoran Terbaik Berdasarkan Sistem Fuzzy ===")
-print(top5[["ID_PELANGGAN", "PELAYANAN", "HARGA", "SKOR_KELAYAKAN"]])
+print(top5[["ID_PELANGGAN", "PELAYANAN", "HARGA", "SKOR_KELAYAKAN", "KETERANGAN"]])
 
-# ==========================
-# 8.
+# 10. Simpan ke Excel
+top5.to_excel("peringkat.xlsx", index=False)
