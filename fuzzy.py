@@ -1,90 +1,59 @@
 import pandas as pd
 
-# --------------------
-# Fungsi Membaca Data
-# --------------------
+# Fungsi untuk membaca data dari file Excel
 def baca_data_excel(file_path):
     return pd.read_excel(file_path)
 
-# --------------------
-# Fungsi Fuzzifikasi Pelayanan Linear Segitiga
-# --------------------
+# Fungsi Fuzzifikasi untuk atribut pelayanan
 def fuzzifikasi_pelayanan(pelayanan):
-    fuzzy = {}
-
-    # Rendah (0-30)
-    if pelayanan <= 30:
-        fuzzy['rendah'] = 1
-    elif 30 < pelayanan < 60:
-        fuzzy['rendah'] = (60 - pelayanan) / (60 - 30)
+    fuzzy = {
+        'buruk': 0,
+        'sedang': 0,
+        'bagus': 0
+    }
+    if pelayanan <= 40:
+        fuzzy['buruk'] = 1
+    elif 40 < pelayanan <= 60:
+        fuzzy['buruk'] = (60 - pelayanan) / 20
+        fuzzy['sedang'] = (pelayanan - 40) / 20
+    elif 60 < pelayanan <= 80:
+        fuzzy['sedang'] = (80 - pelayanan) / 20
+        fuzzy['bagus'] = (pelayanan - 60) / 20
     else:
-        fuzzy['rendah'] = 0
-
-    # Sedang (30-60-80)
-    if 30 < pelayanan < 60:
-        fuzzy['sedang'] = (pelayanan - 30) / (60 - 30)
-    elif 60 <= pelayanan <= 80:
-        fuzzy['sedang'] = (80 - pelayanan) / (80 - 60)
-    else:
-        fuzzy['sedang'] = 0
-
-    # Tinggi (60-100)
-    if pelayanan >= 60:
-        if pelayanan <= 100:
-            fuzzy['tinggi'] = (pelayanan - 60) / (100 - 60)
-        else:
-            fuzzy['tinggi'] = 1
-    else:
-        fuzzy['tinggi'] = 0
-
+        fuzzy['bagus'] = 1
     return fuzzy
 
-# --------------------
-# Fungsi Fuzzifikasi Harga Linear Segitiga
-# --------------------
+# Fungsi Fuzzifikasi untuk atribut harga
 def fuzzifikasi_harga(harga):
-    fuzzy = {}
-
-    # Murah (0-30k)
-    if harga <= 30000:
+    fuzzy = {
+        'murah': 0,
+        'sedang': 0,
+        'mahal': 0
+    }
+    if harga <= 35000:
         fuzzy['murah'] = 1
-    elif 30000 < harga < 50000:
-        fuzzy['murah'] = (50000 - harga) / (50000 - 30000)
+    elif 35000 < harga <= 45000:
+        fuzzy['murah'] = (45000 - harga) / 10000
+        fuzzy['sedang'] = (harga - 35000) / 10000
+    elif 45000 < harga <= 50000:
+        fuzzy['sedang'] = (50000 - harga) / 5000
+        fuzzy['mahal'] = (harga - 45000) / 5000
     else:
-        fuzzy['murah'] = 0
-
-    # Sedang (30k-50k-70k)
-    if 30000 < harga < 50000:
-        fuzzy['sedang'] = (harga - 30000) / (50000 - 30000)
-    elif 50000 <= harga <= 70000:
-        fuzzy['sedang'] = (70000 - harga) / (70000 - 50000)
-    else:
-        fuzzy['sedang'] = 0
-
-    # Mahal (50k-70k-100k)
-    if 50000 < harga < 70000:
-        fuzzy['mahal'] = (harga - 50000) / (70000 - 50000)
-    elif harga >= 70000:
         fuzzy['mahal'] = 1
-    else:
-        fuzzy['mahal'] = 0
-
     return fuzzy
 
-# --------------------
-# Aturan Inferensi
-# --------------------
+# Fungsi Inferensi Fuzzy
 def inferensi(fuzzy_pelayanan, fuzzy_harga):
     rules = {
-        ('rendah', 'mahal'): 'tidak_layak',
-        ('rendah', 'sedang'): 'kurang_layak',
-        ('rendah', 'murah'): 'kurang_layak',
-        ('sedang', 'mahal'): 'kurang_layak',
-        ('sedang', 'sedang'): 'layak',
+        ('buruk', 'murah'): 'kurang_layak',
+        ('buruk', 'sedang'): 'tidak_layak',
+        ('buruk', 'mahal'): 'tidak_layak',
         ('sedang', 'murah'): 'layak',
-        ('tinggi', 'mahal'): 'layak',
-        ('tinggi', 'sedang'): 'sangat_layak',
-        ('tinggi', 'murah'): 'sangat_layak',
+        ('sedang', 'sedang'): 'kurang_layak',
+        ('sedang', 'mahal'): 'tidak_layak',
+        ('bagus', 'murah'): 'sangat_layak',
+        ('bagus', 'sedang'): 'layak',
+        ('bagus', 'mahal'): 'kurang_layak',
     }
 
     hasil = []
@@ -95,35 +64,35 @@ def inferensi(fuzzy_pelayanan, fuzzy_harga):
                 derajat = min(pelayanan_val, harga_val)
                 hasil.append((keputusan, derajat))
 
-    if hasil:
-        # Ambil keputusan dengan derajat keanggotaan paling tinggi
-        hasil.sort(key=lambda x: x[1], reverse=True)
-        return hasil[0]
-    else:
-        return ('tidak_layak', 0)
+    return hasil
 
-# --------------------
-# Mapping Keputusan ke Nilai Crisp
-# --------------------
-crisp_value = {
-    'tidak_layak': 25,
-    'kurang_layak': 50,
-    'layak': 75,
-    'sangat_layak': 100
-}
-
-# --------------------
 # Fungsi Defuzzifikasi
-# --------------------
-def defuzzifikasi(keputusan, derajat):
-    nilai = crisp_value[keputusan]
-    return derajat * nilai
+def defuzzifikasi(hasil_inferensi):
+    nilai_keputusan = {
+        'tidak_layak': 25,
+        'kurang_layak': 50,
+        'layak': 75,
+        'sangat_layak': 100
+    }
 
-# --------------------
-# Main Program
-# --------------------
+    if not hasil_inferensi:
+        return 0
+
+    total_numerator = 0
+    total_denominator = 0
+
+    for keputusan, derajat in hasil_inferensi:
+        nilai = nilai_keputusan[keputusan]
+        total_numerator += derajat * nilai
+        total_denominator += derajat
+
+    if total_denominator == 0:
+        return 0
+    return total_numerator / total_denominator
+
+# Fungsi utama
 def main():
-    # Baca data
+    # Baca data dari file
     data = baca_data_excel('restoran.xlsx')
 
     hasil_akhir = []
@@ -136,9 +105,13 @@ def main():
         fuzzy_pelayanan = fuzzifikasi_pelayanan(pelayanan)
         fuzzy_harga = fuzzifikasi_harga(harga)
 
-        keputusan, derajat = inferensi(fuzzy_pelayanan, fuzzy_harga)
+        hasil_inferensi = inferensi(fuzzy_pelayanan, fuzzy_harga)
+        nilai_defuzzifikasi = defuzzifikasi(hasil_inferensi)
 
-        nilai_defuzzifikasi = defuzzifikasi(keputusan, derajat)
+        if hasil_inferensi:
+            keputusan, derajat = max(hasil_inferensi, key=lambda x: x[1])
+        else:
+            keputusan, derajat = ('tidak_layak', 0)
 
         hasil_akhir.append({
             'ID_PELANGGAN': row['ID_PELANGGAN'],
@@ -149,20 +122,20 @@ def main():
             'Nilai Defuzzifikasi': nilai_defuzzifikasi
         })
 
-    # Ubah ke DataFrame
+    # Ubah menjadi DataFrame
     df_hasil = pd.DataFrame(hasil_akhir)
 
-    # Sortir berdasarkan Nilai Defuzzifikasi (Terbaik ke Terburuk)
+    # Sortir berdasarkan Nilai Defuzzifikasi (besar ke kecil)
     df_sorted = df_hasil.sort_values(by='Nilai Defuzzifikasi', ascending=False)
 
-    # Ambil Top 5
-    df_top5 = df_sorted.head(5)
+    # Ambil Top 10 restoran terbaik
+    df_top10 = df_sorted.head(10)
 
-    # Simpan ke file baru
-    df_top5.to_excel('hasil_top5.xlsx', index=False)
+    # Simpan ke file Excel baru
+    df_top10.to_excel('peringkat.xlsx', index=False)
 
-    print("\nTop 5 hasil terbaik telah disimpan ke 'hasil_top5.xlsx' 🎯")
-    print(df_top5)
+    print("\nTop 10 restoran terbaik telah disimpan ke 'peringkat.xlsx' ")
+    print(df_top10)
 
 if __name__ == "__main__":
     main()
